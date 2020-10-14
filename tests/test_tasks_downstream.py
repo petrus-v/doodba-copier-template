@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from copier import copy
 from plumbum import ProcessExecutionError, local
-from plumbum.cmd import docker_compose, invoke
+from plumbum.cmd import curl, docker_compose, invoke
 from plumbum.machines.local import LocalCommand
 
 
@@ -84,6 +84,50 @@ def test_resetdb(
             assert _install_status("base") == "installed"
             assert _install_status("purchase") == "uninstalled"
             assert _install_status("sale") == "installed"
+    finally:
+        # Imagine the user is in the odoo subrepo for this command
+        with local.cwd(tmp_path / "odoo" / "custom" / "src" / "odoo"):
+            invoke("stop", "--purge")
+
+
+def test_start(
+    cloned_template: Path,
+    docker: LocalCommand,
+    supported_odoo_version: float,
+    tmp_path: Path,
+):
+    """Test the start task.
+
+    On this test flow, other downsream tasks are also tested:
+
+    - img-build
+    - git-aggregate
+    - stop --purge
+    """
+    try:
+        with local.cwd(tmp_path):
+            copy(
+                src_path=str(cloned_template),
+                vcs_ref="HEAD",
+                force=True,
+                data={"odoo_version": supported_odoo_version},
+            )
+            # Imagine the user is in the src subfolder for these tasks
+            with local.cwd(tmp_path / "odoo" / "custom" / "src"):
+                invoke("img-build")
+                invoke("git-aggregate")
+            # Test normal call
+            stdout = invoke("start")
+            print(stdout)
+            assert "Starting" in stdout
+            assert "done" in stdout
+            # Test "--debugpy and --wait" call
+            invoke("stop")
+            stdout = invoke("start", "--debugpy", "--wait")
+            assert "Starting" in stdout
+            assert "done" in stdout
+            curl_stdout = curl("127.0.0.1:12899")
+            assert "(52) Empty reply from server" not in curl_stdout
     finally:
         # Imagine the user is in the odoo subrepo for this command
         with local.cwd(tmp_path / "odoo" / "custom" / "src" / "odoo"):
