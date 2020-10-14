@@ -75,8 +75,8 @@ def cloned_template(tmp_path_factory):
 
 @pytest.fixture()
 def docker() -> LocalCommand:
-    # if os.environ.get("DOCKER_TEST") != "1":
-    #     pytest.skip("Missing DOCKER_TEST=1 env variable")
+    if os.environ.get("DOCKER_TEST") != "1":
+        pytest.skip("Missing DOCKER_TEST=1 env variable")
     try:
         from plumbum.cmd import docker
     except ImportError:
